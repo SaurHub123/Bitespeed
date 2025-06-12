@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import contactRoutes from './routes/contactRoute';
@@ -15,7 +15,7 @@ app.use(cors());
 app.use(express.json());
 
 // Request logging middleware
-app.use((req, res, next) => {
+app.use((req:Request, res:Response, next:NextFunction) => {
   console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
   next();
 });
@@ -25,7 +25,7 @@ app.use('/identify', contactRoutes);
 app.use('/order', orderRoutes);
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/health', (req:Request, res:Response) => {
   res.status(200).json({ 
     status: 'OK',
     timestamp: new Date().toISOString(),
