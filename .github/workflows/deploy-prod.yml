@@ -3,16 +3,20 @@ name: Deploy to Production (Render)
 on:
   push:
     branches: [prod]
+  workflow_dispatch:  
+
+env:
+  CI: true
+  NODE_ENV: production
 
 jobs:
-  build-and-deploy:
+  build-test-deploy:
+    name: Build, Test & Deploy
     runs-on: ubuntu-latest
-
-    env:
-      NODE_ENV: production
+    timeout-minutes: 15
 
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
@@ -20,54 +24,132 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v3
       with:
-        node-version: 18
+        node-version: 18.x
         cache: 'npm'
 
-    - name: Install dependencies
-      run: npm ci
+    - name: Cache node modules
+      uses: actions/cache@v3
+      id: cache
+      with:
+        path: |
+          node_modules
+          */*/node_modules
+        key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
 
-    - name: Run type check
+    - name: Install dependencies
+      run: |
+        npm ci
+        npm install --save-dev @types/node @types/express @types/cors
+        if [ -f "prisma/schema.prisma" ]; then npm install @prisma/client; fi
+
+    - name: Run ESLint
+      run: npx eslint . --ext .ts,.js --fix --max-warnings=0
+
+    - name: Type checking
       run: npm run type-check
 
     - name: Run tests
       run: npm test
 
+    - name: Security audit
+      run: npm audit --production
+
     - name: Build project
       run: npm run build
 
-    - name: Run security audit
-      run: npm audit
+    - name: Run database migrations
+      if: contains(env.NODE_ENV, 'production') && contains(toJson(github.event.commits.*.message), 'migration')
+      run: npx prisma migrate deploy
+      env:
+        DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
 
-    - name: Create build commit
+    - name: Create deployment package
       run: |
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
-        git add -f dist/
-        git commit -m "Build for production deployment [skip ci]" || echo "No changes to commit"
+        mkdir -p deployment
+        cp -R dist node_modules package.json package-lock.json .env.production deployment/
+        if [ -f "prisma/schema.prisma" ]; then cp -R prisma deployment/; fi
 
-    - name: Push build
-      run: git push origin HEAD:prod
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: production-build
+        path: deployment
+        retention-days: 1
 
-    - name: Deploy to Render
+    - name: Trigger Render deployment
+      id: deploy
       run: |
-        curl -X POST \
+        DEPLOY_RESPONSE=$(curl -s -X POST \
           -H "Content-Type: application/json" \
           -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-          -d '{"branch":"prod","clearCache":"do_not_clear"}' \
-          "${{ secrets.RENDER_DEPLOY_WEBHOOK }}"
+          -d '{"branch":"prod","clearCache":"clear"}' \
+          "${{ secrets.RENDER_DEPLOY_WEBHOOK }}")
+        
+        echo "Deployment response: $DEPLOY_RESPONSE"
+        echo "deploy_id=$(echo $DEPLOY_RESPONSE | jq -r '.id')" >> $GITHUB_OUTPUT
 
     - name: Verify deployment
       run: |
         echo "Waiting for deployment to complete..."
-        sleep 30
-        curl --fail "${{ secrets.RENDER_APP_URL }}/health" || exit 1
+        sleep 10
+        
+        ATTEMPTS=0
+        MAX_ATTEMPTS=18  # 3 minutes total wait time (18 * 10 seconds)
+        
+        while [ $ATTEMPTS -lt $MAX_ATTEMPTS ]; do
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.RENDER_APP_URL }}/health")
+          
+          if [ "$RESPONSE" = "200" ]; then
+            echo "✅ Deployment verified"
+            exit 0
+          fi
+          
+          echo "Attempt $((ATTEMPTS+1)): Application not ready yet (Status: $RESPONSE)"
+          sleep 10
+          ATTEMPTS=$((ATTEMPTS+1))
+        done
+        
+        echo "❌ Deployment verification failed after $MAX_ATTEMPTS attempts"
+        exit 1
 
-    - name: Notify deployment status
+    - name: Post deployment notification
       if: always()
-      run: |
-        if [ "${{ job.status }}" = "success" ]; then
-          echo "✅ Deployment successful"
-        else
-          echo "❌ Deployment failed"
-          exit 1
-        fi
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const { data: commit } = await github.rest.repos.getCommit({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            ref: context.sha
+          });
+          
+          const status = '${{ job.status }}' === 'success' ? '✅ Succeeded' : '❌ Failed';
+          const renderUrl = '${{ secrets.RENDER_APP_URL }}';
+          const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+          
+          // Send to PR if this was triggered from one
+          if (context.payload.pull_request) {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `### 🚀 Deployment to Render ${status}\n` +
+                    `- Commit: [${commit.commit.message.split('\n')[0]}](${commit.html_url})\n` +
+                    `- Environment: Production\n` +
+                    `- Timestamp: ${new Date().toISOString()}\n` +
+                    `- [View in Render](${renderUrl})\n` +
+                    `- [View Workflow Run](${runUrl})`
+            });
+          }
+          
+          // Always send to commits
+          await github.rest.repos.createCommitComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            commit_sha: context.sha,
+            body: `### 🚀 Production Deployment ${status}\n` +
+                  `- [View in Render](${renderUrl})\n` +
+                  `- [View Workflow Run](${runUrl})`
+          });
