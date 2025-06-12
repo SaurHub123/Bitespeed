@@ -7,13 +7,13 @@ A robust and scalable **Node.js** API service for managing contacts and orders, 
 
 ## 🚀 Features
 
-- 🔍 Contact identification and merging logic
-- 🔗 Automatic primary/secondary contact resolution
-- 🧾 Order creation and retrieval for each contact
-- 🔄 RESTful API architecture
-- ⚙️ Prisma ORM with PostgreSQL
-- 🧠 Type-safe development with TypeScript
-- 🧪 GitHub Actions CI/CD pipeline
+- 🔍 Contact identification and merging logic  
+- 🔗 Automatic primary/secondary contact resolution  
+- 🧾 Order creation and retrieval for each contact  
+- 🔄 RESTful API architecture  
+- ⚙️ Prisma ORM with PostgreSQL  
+- 🧠 Type-safe development with TypeScript  
+- 🧪 GitHub Actions CI/CD pipeline  
 - ☁️ Auto-deployment to [Render](https://render.com)
 
 ---
@@ -22,10 +22,9 @@ A robust and scalable **Node.js** API service for managing contacts and orders, 
 
 **Saurabh Kumar**  
 Full Stack Developer | Mobile & Backend Specialist  
-📍 Tech Stack: Flutter, Node.js, PostgreSQL, Prisma, AWS, Firebase, Render
+📍 Tech Stack: Flutter, Node.js, PostgreSQL, Prisma, AWS, Firebase, Render  
 🌐 Portfolio: [@saurabh-codes](https://saurabh-codes.onrender.com)  
 🔗 GitHub: [@SaurHub123](https://github.com/SaurHub123)
-
 
 ---
 
@@ -45,9 +44,9 @@ Full Stack Developer | Mobile & Backend Specialist
 
 ## 🧰 Prerequisites
 
-- Node.js v18 or higher
-- PostgreSQL database
-- npm or yarn
+- Node.js v18 or higher  
+- PostgreSQL database  
+- npm or yarn  
 
 ---
 
@@ -201,23 +200,18 @@ Retrieves all orders associated with a specific contact.
 
 ## 🔄 CI/CD Pipeline
 
-The project uses **GitHub Actions** to automate testing, building, and deployment on every push to the `prod` branch.
+The project uses **GitHub Actions** to automate building and deployment on every push to the `prod` branch.
 
-### ✅ CI Tasks
+### ✅ Tasks
 
-* Linting
-* TypeScript checks
-* Unit/Integration testing
-* Prisma migrations
-
-### 🚀 CD Pipeline
-
-* Automatically deploys to [Render](https://render.com) using Deploy Hooks
+* TypeScript build
+* Prisma migration deploy
+* Trigger deployment on Render via Deploy Hook
 
 ### `.github/workflows/deploy.yml`
 
 ```yaml
-name: Deploy to Render
+name: Build and Deploy to Render
 
 on:
   push:
@@ -245,17 +239,17 @@ jobs:
       - name: Run Prisma migration
         run: npx prisma migrate deploy
 
-      - name: Deploy to Render
+      - name: Trigger Deploy on Render
         run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
 ```
 
-> Make sure you add your **Render Deploy Hook URL** to your GitHub repository secrets as `RENDER_DEPLOY_HOOK`.
+> Ensure that `RENDER_DEPLOY_HOOK` is set in your GitHub repository secrets.
 
 ---
 
 ## 🧪 Testing
 
-To run tests (if available):
+To run tests:
 
 ```bash
 npm test
@@ -269,7 +263,7 @@ We welcome contributions!
 
 ```bash
 # Fork the repository
-git clone https://github.com/your-username/Bitespeed.git
+git clone https://github.com/SaurHub123/Bitespeed.git
 
 # Create your feature branch
 git checkout -b feature/YourFeature
@@ -297,4 +291,3 @@ See the [LICENSE](./LICENSE) file for full details.
 ✅ Stable & In Production
 🛠️ New features in development
 📦 Actively maintained
-
